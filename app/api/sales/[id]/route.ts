@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { deleteSale, updateSale } from "@/lib/data-store";
 import { saleInputSchema } from "@/lib/validation";
 
 type Params = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export async function PUT(request: Request, { params }: Params) {
+export async function PUT(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validated = saleInputSchema.parse(body);
-    const updated = await updateSale(params.id, validated);
+    const updated = await updateSale(id, validated);
     return NextResponse.json(updated);
   } catch (error) {
     console.error(error);
@@ -28,9 +29,10 @@ export async function PUT(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
-    await deleteSale(params.id);
+    const { id } = await params;
+    await deleteSale(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   deleteFamilyMember,
   updateFamilyMember,
@@ -6,16 +6,17 @@ import {
 import { familyMemberSchema } from "@/lib/validation";
 
 type Params = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export async function PUT(request: Request, { params }: Params) {
+export async function PUT(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validated = familyMemberSchema.parse(body);
-    const updated = await updateFamilyMember(params.id, validated);
+    const updated = await updateFamilyMember(id, validated);
     return NextResponse.json(updated);
   } catch (error) {
     console.error(error);
@@ -31,9 +32,10 @@ export async function PUT(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
-    await deleteFamilyMember(params.id);
+    const { id } = await params;
+    await deleteFamilyMember(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);

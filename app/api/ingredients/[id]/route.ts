@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   deleteIngredient,
   updateIngredient,
@@ -6,16 +6,17 @@ import {
 import { ingredientInputSchema } from "@/lib/validation";
 
 type Params = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
-export async function PUT(request: Request, { params }: Params) {
+export async function PUT(request: NextRequest, { params }: Params) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validated = ingredientInputSchema.parse(body);
-    const updated = await updateIngredient(params.id, validated);
+    const updated = await updateIngredient(id, validated);
     return NextResponse.json(updated);
   } catch (error) {
     console.error(error);
@@ -29,9 +30,10 @@ export async function PUT(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
-    await deleteIngredient(params.id);
+    const { id } = await params;
+    await deleteIngredient(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
