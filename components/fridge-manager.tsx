@@ -55,7 +55,9 @@ export function FridgeManager() {
   }
 
   function handleChange(
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    event: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) {
     const { name, value } = event.target;
     setFormState((prev) => ({ ...prev, [name]: value }));
