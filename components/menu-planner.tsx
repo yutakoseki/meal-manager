@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type {
-  FamilyMember,
-  Ingredient,
-  MenuSuggestion,
-  Sale,
-  UsedIngredient,
-} from "@/types";
+import { useRouter } from "next/navigation";
+import type { FamilyMember, Ingredient, MenuSuggestion, Sale } from "@/types";
 import { apiRequest } from "@/lib/client";
 import { APPETITE_OPTIONS, LIFE_STAGE_OPTIONS } from "@/lib/portion";
 
@@ -25,27 +20,8 @@ const emptyFamilyForm: FamilyFormState = {
   notes: "",
 };
 
-function findIngredient(
-  list: Ingredient[],
-  used: UsedIngredient,
-): Ingredient | undefined {
-  if (used.ingredientId) {
-    return list.find((item) => item.id === used.ingredientId);
-  }
-  return list.find((item) => item.name === used.name);
-}
-
-function nextQuantity(
-  ingredient: Ingredient | undefined,
-  used: UsedIngredient,
-): number {
-  if (!ingredient) return used.usedQuantity;
-  return Number(
-    Math.max(0, ingredient.quantity - used.usedQuantity).toFixed(2),
-  );
-}
-
 export function MenuPlanner() {
+  const router = useRouter();
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -57,11 +33,6 @@ export function MenuPlanner() {
   const [dataLoading, setDataLoading] = useState(true);
   const [suggestions, setSuggestions] = useState<MenuSuggestion[]>([]);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
-  const [selectedMenu, setSelectedMenu] = useState<MenuSuggestion | null>(null);
-  const [inventoryDraft, setInventoryDraft] = useState<Record<string, string>>(
-    {},
-  );
-  const [inventorySaving, setInventorySaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -204,8 +175,6 @@ export function MenuPlanner() {
         body: JSON.stringify(payload),
       });
       setSuggestions(response);
-      setSelectedMenu(null);
-      setInventoryDraft({});
       if (response.length === 0) {
         setMessage("提案できる献立がありませんでした。条件を見直してください。");
       }
@@ -218,53 +187,9 @@ export function MenuPlanner() {
     }
   }
 
-  function startInventoryAdjustments(menu: MenuSuggestion) {
-    setSelectedMenu(menu);
-    const draft: Record<string, string> = {};
-    menu.usedIngredients.forEach((used) => {
-      if (!used.ingredientId) return;
-      const match = findIngredient(ingredients, used);
-      draft[used.ingredientId] = String(nextQuantity(match, used));
-    });
-    setInventoryDraft(draft);
-  }
-
-  function handleInventoryChange(id: string, value: string) {
-    setInventoryDraft((prev) => ({ ...prev, [id]: value }));
-  }
-
-  async function updateInventory() {
-    if (!selectedMenu) return;
-    const updates = selectedMenu.usedIngredients
-      .filter((item) => item.ingredientId)
-      .map((item) => ({
-        id: item.ingredientId as string,
-        quantity: Number(inventoryDraft[item.ingredientId as string] ?? 0),
-      }))
-      .filter((update) => !Number.isNaN(update.quantity) && update.quantity >= 0);
-
-    if (updates.length === 0) {
-      setMessage("在庫更新対象の食材がありません。");
-      return;
-    }
-
-    setInventorySaving(true);
-    setMessage(null);
-    try {
-      await apiRequest("/api/ingredients/bulk-update", {
-        method: "PUT",
-        body: JSON.stringify({ items: updates }),
-      });
-      setMessage("在庫を更新しました。");
-      const refreshed = await apiRequest<Ingredient[]>("/api/ingredients");
-      setIngredients(refreshed);
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "在庫更新に失敗しました",
-      );
-    } finally {
-      setInventorySaving(false);
-    }
+  function moveToSelection(menu: MenuSuggestion) {
+    sessionStorage.setItem("meal-manager:selectedMenu", JSON.stringify(menu));
+    router.push("/menu/selected");
   }
 
   return (
@@ -318,7 +243,7 @@ export function MenuPlanner() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => startInventoryAdjustments(suggestion)}
+                  onClick={() => moveToSelection(suggestion)}
                   className="mt-auto rounded-full bg-indigo-600 px-4 py-2 text-sm text-white transition hover:bg-indigo-700"
                 >
                   この献立を採用
@@ -521,77 +446,6 @@ export function MenuPlanner() {
           </div>
         )}
       </section>
-
-      {selectedMenu && (
-        <section className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold">
-                在庫更新: {selectedMenu.menuTitle}
-              </h2>
-              <p className="text-sm text-zinc-500">
-                スマホでも調整しやすいシンプル入力です。
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedMenu(null)}
-              className="text-sm text-emerald-600 underline"
-            >
-              閉じる
-            </button>
-          </div>
-          <div className="mt-4 space-y-3">
-            {selectedMenu.usedIngredients.map((item) => {
-              const ingredient = findIngredient(ingredients, item);
-              const id = item.ingredientId ?? item.name;
-              return (
-                <div
-                  key={id}
-                  className="rounded-2xl border border-zinc-100 p-4 shadow-sm"
-                >
-                  <p className="text-sm text-zinc-500">{item.name}</p>
-                  <div className="mt-2 flex flex-col gap-2 text-sm">
-                    <span>
-                      使用量: {item.usedQuantity}
-                      {item.unit && ` ${item.unit}`}
-                    </span>
-                    {ingredient && item.ingredientId ? (
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        className="w-full rounded-lg border px-3 py-2"
-                        value={inventoryDraft[item.ingredientId] ?? ""}
-                        onChange={(event) =>
-                          handleInventoryChange(
-                            item.ingredientId as string,
-                            event.target.value,
-                          )
-                        }
-                      />
-                    ) : (
-                      <span className="text-xs text-zinc-400">
-                        在庫登録なし
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={updateInventory}
-              disabled={inventorySaving}
-              className="rounded-full bg-emerald-600 px-5 py-2 text-white disabled:opacity-50"
-            >
-              {inventorySaving ? "更新中..." : "在庫を更新"}
-            </button>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

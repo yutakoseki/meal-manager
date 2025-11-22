@@ -40,6 +40,9 @@ export interface Sale {
   endDate?: string;
   category?: string;
   memo?: string;
+  storeName?: string;
+  storeUrl?: string;
+  storeSlug?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +91,7 @@ export interface MenuSuggestion {
   description: string;
   nutritionComment: string;
   usedIngredients: UsedIngredient[];
+  recipeSteps: string[];
 }
 
 export interface MenuSuggestionRequest {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Sale } from "@/types";
 import { apiRequest } from "@/lib/client";
 
@@ -12,6 +13,8 @@ type SaleFormState = {
   endDate: string;
   category: string;
   memo: string;
+  storeName: string;
+  storeUrl: string;
 };
 
 const emptySaleForm: SaleFormState = {
@@ -22,9 +25,38 @@ const emptySaleForm: SaleFormState = {
   endDate: "",
   category: "",
   memo: "",
+  storeName: "",
+  storeUrl: "",
 };
 
+function toSlug(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function deriveStoreSlug(sale: Sale): string | null {
+  if (sale.storeSlug) return sale.storeSlug;
+  if (sale.storeUrl) {
+    try {
+      const parsed = new URL(sale.storeUrl);
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      if (segments.length > 0) {
+        return segments[segments.length - 1];
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  if (sale.storeName) return toSlug(sale.storeName);
+  return null;
+}
+
 export function SalesManager() {
+  const router = useRouter();
   const [sales, setSales] = useState<Sale[]>([]);
   const [formState, setFormState] = useState<SaleFormState>(emptySaleForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -65,6 +97,8 @@ export function SalesManager() {
       endDate: sale.endDate ?? "",
       category: sale.category ?? "",
       memo: sale.memo ?? "",
+      storeName: sale.storeName ?? "",
+      storeUrl: sale.storeUrl ?? "",
     });
   }
 
@@ -96,6 +130,8 @@ export function SalesManager() {
       endDate: formState.endDate || undefined,
       category: formState.category.trim() || undefined,
       memo: formState.memo.trim() || undefined,
+      storeName: formState.storeName.trim() || undefined,
+      storeUrl: formState.storeUrl.trim() || undefined,
     };
 
     try {
@@ -236,6 +272,26 @@ export function SalesManager() {
               placeholder="肉 / 野菜 など"
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            店舗名
+            <input
+              name="storeName"
+              value={formState.storeName}
+              onChange={handleChange}
+              className="rounded-lg border px-3 py-2"
+              placeholder="例: グリーンマート桜台店"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            店舗URL
+            <input
+              name="storeUrl"
+              value={formState.storeUrl}
+              onChange={handleChange}
+              className="rounded-lg border px-3 py-2"
+              placeholder="https://shop.example.com"
+            />
+          </label>
           <label className="flex flex-col gap-1 text-sm md:col-span-2">
             メモ
             <textarea
@@ -268,11 +324,27 @@ export function SalesManager() {
           <p className="text-sm text-zinc-500">登録されている特売情報がありません。</p>
         ) : (
           <div className="grid gap-4">
-            {sales.map((sale) => (
-              <article
-                key={sale.id}
-                className="rounded-2xl border border-zinc-100 p-4 shadow-sm"
-              >
+            {sales.map((sale) => {
+              const storeSlug = deriveStoreSlug(sale);
+              return (
+                <article
+                  key={sale.id}
+                  role={storeSlug ? "button" : undefined}
+                  tabIndex={storeSlug ? 0 : -1}
+                  onClick={() => {
+                    if (storeSlug) router.push(`/stores/${storeSlug}?product=${encodeURIComponent(sale.name)}`);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!storeSlug) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/stores/${storeSlug}?product=${encodeURIComponent(sale.name)}`);
+                    }
+                  }}
+                  className={`rounded-2xl border border-zinc-100 p-4 shadow-sm ${
+                    storeSlug ? "cursor-pointer hover:border-emerald-200 hover:bg-emerald-50" : ""
+                  }`}
+                >
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="text-base font-semibold">{sale.name}</h3>
@@ -324,6 +396,15 @@ export function SalesManager() {
                       </dd>
                     </div>
                   )}
+                  {(sale.storeName || sale.storeUrl) && (
+                    <div className="flex justify-between">
+                      <dt className="text-zinc-500">店舗</dt>
+                      <dd className="text-right">
+                        {sale.storeName ?? "店舗情報なし"}
+                        {deriveStoreSlug(sale) && "（クリックで店舗特売ページへ）"}
+                      </dd>
+                    </div>
+                  )}
                   {sale.memo && (
                     <div>
                       <dt className="text-zinc-500">メモ</dt>
@@ -331,8 +412,9 @@ export function SalesManager() {
                     </div>
                   )}
                 </dl>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

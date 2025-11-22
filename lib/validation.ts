@@ -28,6 +28,12 @@ export const saleInputSchema = z.object({
     .optional(),
   category: z.string().optional(),
   memo: z.string().optional(),
+  storeName: z.string().optional(),
+  storeUrl: z.string().url().optional(),
+  storeSlug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/, "storeSlug は小文字英数字とハイフンのみです")
+    .optional(),
 });
 
 export const familyMemberSchema = z.object({

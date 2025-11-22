@@ -79,17 +79,40 @@ function makeUsedIngredient(
   source: Ingredient,
   ratio: number,
   portionScale: number,
+  nameOverride?: string,
 ): UsedIngredient {
-  const used = Math.min(
-    source.quantity,
-    Math.max(0.1, Number((source.quantity * ratio * portionScale).toFixed(2))),
-  );
+  const base = source.quantity * ratio * portionScale;
+  const target = base * 1.3; // 少し多めに見積もって不足を顕在化させる
+  const halfStep = Math.max(0.5, Math.ceil(target * 2) / 2);
+  const maxReasonable = Number((source.quantity * 1.5).toFixed(2));
+
+  let used = Math.min(halfStep, maxReasonable);
+  if (used < source.quantity && source.quantity - used < 0.25) {
+    used = source.quantity; // 中途半端に余らせず使い切り
+  }
   return {
     ingredientId: source.id,
-    name: source.name,
+    name: nameOverride ?? source.name,
     usedQuantity: Number(used.toFixed(2)),
     unit: source.unit,
   };
+}
+
+function buildRecipeSteps(
+  menuTitle: string,
+  usedIngredients: UsedIngredient[],
+): string[] {
+  const main = usedIngredients[0]?.name ?? "メイン食材";
+  const others = usedIngredients.slice(1).map((item) => item.name);
+  const veggies = others.length ? others.join("、") : "野菜";
+
+  return [
+    `${main}に塩こしょうなどで下味をつけ、5分ほど置いて旨みを引き出します。`,
+    `${veggies}は食べやすい大きさに切り、火が入りやすいよう薄めに揃えます。`,
+    `${main}を中火で焼き色が付くまで加熱し、${others.length ? `${veggies}を加えて` : "好みの具材を加えて"}さっと炒め合わせます。`,
+    "味を整えたら盛り付けて完成。ごはんやスープと一緒にどうぞ。",
+    `${menuTitle}で使った食材はアプリから在庫更新しておくと次回の提案がスムーズです。`,
+  ];
 }
 
 function buildNutritionComment(ingredients: Ingredient[]): string {
@@ -158,6 +181,7 @@ function buildMenuSuggestions(request: MenuSuggestionRequest): MenuSuggestion[] 
         "メインのたんぱく質と野菜、副菜、主食をワンプレートにまとめた献立です。",
       nutritionComment: buildNutritionComment(involvedIngredients),
       usedIngredients: used,
+      recipeSteps: buildRecipeSteps("鶏肉と野菜の照り焼きプレート", used),
     });
   }
 
@@ -165,14 +189,26 @@ function buildMenuSuggestions(request: MenuSuggestionRequest): MenuSuggestion[] 
     const sale = activeSales[0];
     const match =
       sorted.find((item) =>
+        item.name.toLowerCase().includes(sale.name.toLowerCase()) ||
+        sale.name.toLowerCase().includes(item.name.toLowerCase()),
+      ) ??
+      sorted.find((item) =>
         (item.category ?? "").includes(sale.category ?? ""),
-      ) ?? sorted[0];
+      ) ??
+      sorted[0];
+    const saleUsed = makeUsedIngredient(
+      match,
+      0.7,
+      portionScale,
+      sale.name,
+    );
     suggestions.push({
       id: crypto.randomUUID(),
       menuTitle: `${sale.name}で作るお得なメイン`,
       description: `特売の「${sale.name}」を活用し、節約しつつボリュームを確保します。`,
       nutritionComment: "特売品でコスパ良くたんぱく質を確保できます",
-      usedIngredients: [makeUsedIngredient(match, 0.7, portionScale)],
+      usedIngredients: [saleUsed],
+      recipeSteps: buildRecipeSteps(`${sale.name}で作るお得なメイン`, [saleUsed]),
     });
   }
 
@@ -190,6 +226,12 @@ function buildMenuSuggestions(request: MenuSuggestionRequest): MenuSuggestion[] 
       usedIngredients: usedSources.map((ingredient) =>
         makeUsedIngredient(ingredient, 0.5, portionScale),
       ),
+      recipeSteps: buildRecipeSteps(
+        "野菜たっぷりミルクスープ",
+        usedSources.map((ingredient) =>
+          makeUsedIngredient(ingredient, 0.5, portionScale),
+        ),
+      ),
     });
   }
 
@@ -200,6 +242,10 @@ function buildMenuSuggestions(request: MenuSuggestionRequest): MenuSuggestion[] 
       description: "賞味期限が近い食材を優先的に消費する献立です。",
       nutritionComment: buildNutritionComment([sorted[0]]),
       usedIngredients: [makeUsedIngredient(sorted[0], 0.5, portionScale)],
+      recipeSteps: buildRecipeSteps(
+        `${sorted[0].name}を使ったクイックメニュー`,
+        [makeUsedIngredient(sorted[0], 0.5, portionScale)],
+      ),
     });
   }
 
