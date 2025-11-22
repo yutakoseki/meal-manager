@@ -54,6 +54,9 @@ export function FridgeManager() {
     }
   }
 
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>): void;
+  function handleChange(event: React.ChangeEvent<HTMLTextAreaElement>): void;
+  function handleChange(event: React.ChangeEvent<HTMLSelectElement>): void;
   function handleChange(
     event: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
